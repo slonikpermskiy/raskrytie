@@ -1,0 +1,619 @@
+<template>
+
+	<v-container fluid class="ma-0 pa-0">
+		
+		<v-container fluid class="ma-0 pa-0">
+
+			<v-row class="d-flex align-center mt-2 mb-6 pt-2" v-if="eventsMap(date).length != 0">
+															
+				<v-col cols="12" class="my-0 py-0">
+
+					<v-card>
+
+						<template v-for="(event, i) in eventsMap(date)" link>
+												
+							<v-list-item class="d-flex align-center my-0 px-3 py-2">
+
+								<div v-if="event.otchetdata.myornot == 'my'">
+									<v-chip
+										class="my-2 me-1"
+										color="primary"
+										text-color="white">														
+											<v-icon left>
+												mdi-star
+											 </v-icon>														
+											Мой
+									</v-chip>
+								</div>
+								
+								<v-list-item-content class="ma-0 pa-0 ms-2">
+									<v-list-item-title class="wrap-text me-2" v-if="event.name">{{ event.name }}</v-list-item-title>
+									<v-list-item-title class="wrap-text me-2" v-if="event.otchetdata.razdelname">{{ event.otchetdata.razdelname }}</v-list-item-title>
+									<v-list-item-title class="wrap-text me-2" v-if="event.reportday">
+									
+										<otchetperiods 
+											:value="event.reportday" 
+											:intervdayitems="intervdayitems"
+											:intervweekitems="intervweekitems"
+											:weekdaysitems="weekdaysitems"		
+											:intervmonthitems="intervmonthitems"
+											:defaultmonthdays="defaultmonthdays"
+											:monthweekitems="monthweekitems"
+											:intervquarteritems="intervquarteritems"
+											:quarterdays="quarterdays"
+											:intervyearitems="intervyearitems"
+											:yearmonthitems="yearmonthitems"
+											textsize="text-body-1"
+											padding="py-0"/>
+									
+									</v-list-item-title>
+								</v-list-item-content>
+														
+								<v-spacer></v-spacer>
+									
+								<div>
+
+									<v-menu bottom left>
+										<template v-slot:activator="{ on: onMenu, attrs }">
+																					
+											<v-tooltip left max-width="400px" :disabled="premiumstatus">
+												<template v-slot:activator="{ on: onTooltip, attrs }">
+																									
+													<v-chip :color="getStatusColor(event.status)" class="ma-1 me-2" @click.prevent v-bind="attrs" v-on="{...onMenu, ...onTooltip}">
+																				
+														<div class="ms-2 white--text text-uppercase">{{ getStatusName(event.status) }}</div>
+
+														<v-icon 	
+															class="py-2 ps-1"
+															color="white">
+																mdi mdi-dots-vertical
+														</v-icon>
+														
+													</v-chip>
+
+												</template>
+
+												<span>Смена статуса доступна только для уровня доступа Премиум.</span>
+
+											</v-tooltip>
+
+										</template>
+
+										<v-list v-if="premiumstatus">
+											<v-list-item @click="openOtchStatusNo(event)">
+												<v-list-item-title>Не сдано</v-list-item-title>
+											</v-list-item>
+											<v-list-item @click="openOtchStatusYes(event)">
+												<v-list-item-title>Сдано</v-list-item-title>
+											</v-list-item>
+											<v-list-item @click="openOtchStatusNotNow(event)">
+												<v-list-item-title>Не сдается</v-list-item-title>
+											</v-list-item>
+										</v-list>
+
+									</v-menu>
+
+								</div>
+
+							</v-list-item>
+
+							<v-divider
+								v-if="i < eventsMap(date).length - 1">
+							</v-divider>
+						  
+						</template>
+
+				  </v-card>
+
+				</v-col>
+			
+			</v-row>
+		
+		</v-container>
+	
+		<v-dialog v-model="dialogOtchStatusYes" max-width="500px" scrollable persistent>
+			<v-card>
+			
+				<v-card-title>
+					<span class="text-h5">Дата сдачи отчета</span>
+					<v-spacer></v-spacer>
+					<v-btn
+						icon
+						@click="dialogOtchStatusYes = false">
+							<v-icon>mdi-close</v-icon>
+					</v-btn>  
+				</v-card-title>
+				
+				<v-card-text class="pb-0">
+								  
+					<div v-if="errors_otch_status">
+						<div v-for="(v, k) in errors_otch_status" :key="k">
+							<v-alert type="error" v-for="error in v" :key="error">{{ error }}</v-alert>
+						</div>
+					</div>
+					
+					
+					<v-date-picker
+						v-model="otch_status.realdate"
+						full-width
+						class="my-4 pb-0"
+						no-title
+						:first-day-of-week="1"
+						locale="ru-ru">
+					</v-date-picker>
+											
+				</v-card-text>
+	
+				<v-card-actions>
+					<v-spacer></v-spacer>
+					
+						<v-btn color="info" @click="setOtchStatus(1)" :loading="loading_otch_status" class="mb-2">
+							Сохранить
+						</v-btn>
+
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
+		
+		
+		<v-dialog v-model="dialogOtchStatusNotNow" max-width="500px" scrollable persistent>
+			<v-card>
+			
+				<v-card-title>
+					<span class="text-h5">Сменить статус?</span>
+					<v-spacer></v-spacer>
+					<v-btn
+						icon
+						@click="dialogOtchStatusNotNow = false">
+							<v-icon>mdi-close</v-icon>
+					</v-btn>  
+				</v-card-title>
+				
+				<v-card-text>
+				
+					<v-container>
+								  
+						<div v-if="errors_otch_status">
+							<div v-for="(v, k) in errors_otch_status" :key="k">
+								<v-alert type="error" v-for="error in v" :key="error">{{ error }}</v-alert>
+							</div>
+						</div>
+						
+						<div class="black--text text-body-1 wrap-text">
+							Отчет не сдается в этом периоде. Подтвердите смену статуса.
+						</div>
+						
+					</v-container>
+
+				</v-card-text>
+
+				<v-card-actions>
+					<v-spacer></v-spacer>
+					
+					<v-btn color="info" @click="setOtchStatus(2)" :loading="loading_otch_status" class="mb-2">
+						Сохранить
+					</v-btn>
+
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
+		
+		
+		<v-dialog v-model="dialogOtchStatusNo" max-width="500px" scrollable persistent>
+			<v-card>
+			
+				<v-card-title>
+					<span class="text-h5">Сменить статус?</span>
+					<v-spacer></v-spacer>
+					<v-btn
+						icon
+						@click="dialogOtchStatusNo = false">
+							<v-icon>mdi-close</v-icon>
+					</v-btn>  
+				</v-card-title>
+				
+				<v-card-text>
+				
+					<v-container>
+								  
+						<div v-if="errors_otch_status">
+							<div v-for="(v, k) in errors_otch_status" :key="k">
+								<v-alert type="error" v-for="error in v" :key="error">{{ error }}</v-alert>
+							</div>
+						</div>
+						
+						<div class="black--text text-body-1 wrap-text">
+							Отчет не сдан. Подтвердите смену статуса. 
+						</div>
+						
+					</v-container>
+
+				</v-card-text>
+
+				<v-card-actions>
+					<v-spacer></v-spacer>
+					
+					<v-btn color="info" @click="setOtchStatus(0)" :loading="loading_otch_status" class="mb-2">
+						Сохранить
+					</v-btn>
+
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
+		
+
+		
+	</v-container>
+	
+</template>
+
+<script>
+
+	import {DateTime} from "luxon";
+
+	export default {
+		
+		name: "OtchetPlanFacts",
+				
+		data: () => ({
+		
+			dialogOtchStatusYes: false,
+			dialogOtchStatusNotNow: false,
+			dialogOtchStatusNo: false,
+			errors_otch_status: '',
+			loading_otch_status: false,
+			
+			otch_status: {},
+			
+			default_otch_status: {
+				itemindex: '',
+				id: '',
+				userid: '',
+				formid: '',
+				categorytable: '',
+				category: '',
+				status: '',
+				plandate: '',
+				realdate: '',
+			},
+		
+			statuscolors: ['red', 'green', 'orange'],
+			statusnames: ['Не сдано', 'Сдано', 'Не сдается'],
+			
+			intervdayitems: [
+				{ id: 1, value: 'Ежедневно' },
+				{ id: 2, value: '1 раз в 2 дня' },
+				{ id: 3, value: '1 раз в 3 дня' },
+				{ id: 4, value: '1 раз в 4 дня' },
+				{ id: 5, value: '1 раз в 5 дней' },
+				{ id: 6, value: '1 раз в 6 дней' },
+				{ id: 7, value: '1 раз в 7 дней' },
+				{ id: 8, value: '1 раз в 8 дней' },
+				{ id: 9, value: '1 раз в 9 дней' },
+				{ id: 10, value: '1 раз в 10 дней' },
+				{ id: 15, value: '1 раз в 15 дней' },
+				{ id: 20, value: '1 раз в 20 дней' },
+				{ id: 25, value: '1 раз в 25 дней' },
+				{ id: 30, value: '1 раз в 30 дней' },
+				{ id: 50, value: '1 раз в 50 дней' },
+				{ id: 100, value: '1 раз в 100 дней' },
+			],
+					
+			
+			intervweekitems: [
+				{ id: 1, value: 'Еженедельно' },
+				{ id: 2, value: '1 раз в 2 недели' },
+				{ id: 3, value: '1 раз в 3 недели' },
+				{ id: 4, value: '1 раз в 4 недели' },
+			],
+			
+				
+			weekdaysitems: [
+				{ id: 1, value: 'Понедельник' },
+				{ id: 2, value: 'Вторник' },
+				{ id: 3, value: 'Среда' },
+				{ id: 4, value: 'Четверг' },
+				{ id: 5, value: 'Пятница' },
+				{ id: 6, value: 'Суббота' },
+				{ id: 7, value: 'Воскресенье' },
+			],
+			
+			intervmonthitems: [
+				{ id: 1, value: 'Ежемесячно' },
+				{ id: 2, value: '1 раз в 2 месяца' },
+				{ id: 3, value: '1 раз в 3 месяца' },
+				{ id: 4, value: '1 раз в 4 месяца' },
+				{ id: 5, value: '1 раз в 5 месяцев' },
+				{ id: 6, value: '1 раз в 6 месяцев' },
+				{ id: 7, value: '1 раз в 9 месяцев' },
+				{ id: 8, value: '1 раз в 12 месяцев' },
+			],
+			
+
+			defaultmonthdays: [
+				{ id: 1, value: 1 }, { id: 2, value: 2 }, { id: 3, value: 3 }, { id: 4, value: 4 }, { id: 5, value: 5 }, { id: 6, value: 6 }, { id: 7, value: 7 }, { id: 8, value: 8 },
+				{ id: 9, value: 9 }, { id: 10, value: 10 }, { id: 11, value: 11 }, { id: 12, value: 12 }, { id: 13, value: 13 }, { id: 14, value: 14 },
+				{ id: 15, value: 15 }, { id: 16, value: 16 }, { id: 17, value: 17 }, { id: 18, value: 18 }, { id: 19, value: 19 }, { id: 20, value: 20 },
+				{ id: 21, value: 21 }, { id: 22, value: 22 }, { id: 23, value: 23 }, { id: 24, value: 24 }, { id: 25, value: 25 }, { id: 26, value: 26 }, 
+				{ id: 27, value: 27 }, { id: 28, value: 28 }, { id: 29, value: 29 }, { id: 30, value: 30 }, { id: 31, value: 31 }, { id: 'last', value: 'Последний' },
+			],
+			
+			
+			monthweekitems: [
+				{ id: 1, value: 'Первая' },
+				{ id: 2, value: 'Вторая' },
+				{ id: 3, value: 'Третья' },
+				{ id: 4, value: 'Четвертая' },
+				{ id: 5, value: 'Последняя' },
+			],
+			
+			
+			intervquarteritems: [
+				{ id: 1, value: 'Ежеквартально' },
+				{ id: 2, value: '1 раз в 2 квартала' },
+				{ id: 3, value: '1 раз в 3 квартала' },
+				{ id: 4, value: '1 раз в 4 квартала' },
+			],
+			
+			
+			quarterdays: [
+				{ id: 1, value: 1 }, { id: 2, value: 2 }, { id: 3, value: 3 }, { id: 4, value: 4 }, { id: 5, value: 5 }, { id: 6, value: 6 }, { id: 7, value: 7 }, { id: 8, value: 8 },
+				{ id: 9, value: 9 }, { id: 10, value: 10 }, { id: 11, value: 11 }, { id: 12, value: 12 }, { id: 13, value: 13 }, { id: 14, value: 14 },
+				{ id: 15, value: 15 }, { id: 16, value: 16 }, { id: 17, value: 17 }, { id: 18, value: 18 }, { id: 19, value: 19 }, { id: 20, value: 20 },
+				{ id: 21, value: 21 }, { id: 22, value: 22 }, { id: 23, value: 23 }, { id: 24, value: 24 }, { id: 25, value: 25 }, { id: 26, value: 26 }, 
+				{ id: 27, value: 27 }, { id: 28, value: 28 }, { id: 29, value: 29 }, { id: 30, value: 30 }, { id: 35, value: 35 }, { id: 40, value: 40 },
+				{ id: 45, value: 45 }, { id: 50, value: 50 }, { id: 55, value: 55 }, { id: 60, value: 60 }, { id: 65, value: 65 }, { id: 70, value: 70 }, 
+				{ id: 75, value: 75 }, { id: 80, value: 80 }, { id: 85, value: 85 }, { id: 90, value: 90 }, { id: 'last', value: 'Последний' }, 
+			],
+			
+			
+			intervyearitems: [
+				{ id: 1, value: 'Ежегодно' },
+				{ id: 2, value: '1 раз в 2 года' },
+				{ id: 3, value: '1 раз в 3 года' },
+			],
+			
+			yearmonthitems: [
+				{ id: 1, value: 'Январь' }, { id: 2, value: 'Февраль' }, { id: 3, value: 'Март' }, { id: 4, value: 'Апрель' }, 
+				{ id: 5, value: 'Май' }, { id: 6, value: 'Июнь' }, { id: 7, value: 'Июль' }, { id: 8, value: 'Август' }, 
+				{ id: 9, value: 'Сентябрь' }, { id: 10, value: 'Октябрь' }, { id: 11, value: 'Ноябрь' }, { id: 12, value: 'Декабрь' }, 
+			],
+		
+		}),
+		
+		watch: {
+			
+			dialogOtchStatusYes (val) {
+				val || this.closeOtchStatusYes()
+			},
+			
+			dialogOtchStatusNotNow (val) {
+				val || this.closeOtchStatusNotNow()
+			},
+			
+			dialogOtchStatusNo (val) {
+				val || this.closeOtchStatusNo()
+			},
+	
+		},
+		
+		props: {
+			date: String,
+			events: Array,
+			premiumstatus: Boolean,
+			userid: Number,
+		},
+		
+		
+		methods: {
+		
+			eventsMap (date) {
+				var map = []
+				this.events.forEach((event) => {
+					if (date == event.start) {
+						map.push(event);
+					}
+				})
+				return map
+			},
+		
+			formatDate(date) {
+				if (date === null || date === undefined) {
+					return null
+				} else {
+					return DateTime.fromISO(date).toFormat('dd.MM.yyyy');
+				}
+			},
+			
+			getStatusColor (status) {				
+				if (/*this.premiumstatus &&*/ status) {
+					return this.statuscolors[status.status]
+				} else {
+					return this.statuscolors[0]
+				}
+			},
+			
+			getStatusName (status) {
+				if (/*this.premiumstatus &&*/ status) {
+					if (status.status == 1) {
+						return this.statusnames[status.status] + ' ' + this.formatDate(status.realdate)
+					} else {
+						return this.statusnames[status.status]
+					}
+				} else {
+					return this.statusnames[0]
+				}
+			},
+			
+			linkornot(link){
+				if (link === null) {
+					return false;
+				} else {
+					if (link.indexOf('http') > -1) {
+						return true;
+					} else {
+						return false;
+					}
+				}	
+			},
+			
+				
+			openOtchStatusYes (item) {	
+
+				if (this.premiumstatus) {
+					
+					this.otch_status = Object.assign({}, this.default_otch_status);
+					if (item.status) {
+						this.otch_status.id = item.status.id;
+					} else {
+						this.otch_status.id = '';
+					}
+					this.otch_status.userid = this.userid;					
+					this.otch_status.formid = item.otchetdata.id;
+					this.otch_status.categorytable = item.otchetdata.categorytable;
+					this.otch_status.category = item.otchetdata.category;		
+					this.otch_status.status = 1;
+					this.otch_status.plandate = DateTime.fromISO(item.start).toFormat('yyyy-MM-dd');
+					this.otch_status.realdate = DateTime.now().toFormat('yyyy-MM-dd');
+					this.otch_status.itemindex = this.events.indexOf(item);				
+					this.errors_otch_status = '',
+					this.dialogOtchStatusYes = true
+				
+				}
+			},
+			
+			
+			closeOtchStatusYes () {				
+				this.dialogOtchStatusYes = false
+			},
+			
+			openOtchStatusNotNow (item) {
+				
+				if (this.premiumstatus) {
+
+					this.otch_status = Object.assign({}, this.default_otch_status);
+					if (item.status) {
+						this.otch_status.id = item.status.id;
+					} else {
+						this.otch_status.id = '';
+					}
+					this.otch_status.userid = this.userid;					
+					this.otch_status.formid = item.otchetdata.id;
+					this.otch_status.categorytable = item.otchetdata.categorytable;
+					this.otch_status.category = item.otchetdata.category;		
+					this.otch_status.status = 2;
+					this.otch_status.plandate = DateTime.fromISO(item.start).toFormat('yyyy-MM-dd');
+					this.otch_status.realdate = '';	
+					this.otch_status.itemindex = this.events.indexOf(item);	
+					this.errors_otch_status = '';
+					this.dialogOtchStatusNotNow = true 
+				
+				}
+				
+			},
+			
+			closeOtchStatusNotNow () {
+				this.dialogOtchStatusNotNow = false
+			},
+			
+			
+			openOtchStatusNo (item) {
+				
+				if (this.premiumstatus) {
+
+					this.otch_status = Object.assign({}, this.default_otch_status);
+					if (item.status) {
+						this.otch_status.id = item.status.id;
+					} else {
+						this.otch_status.id = '';
+					}
+					
+					this.otch_status.userid = this.userid;	
+					this.otch_status.plandate = DateTime.fromISO(item.start).toFormat('yyyy-MM-dd');
+					this.otch_status.status = 0;
+					this.otch_status.itemindex = this.events.indexOf(item);	
+					this.errors_otch_status = '';
+					this.dialogOtchStatusNo = true 
+				
+				}
+				
+			},
+						
+			closeOtchStatusNo () {
+				this.dialogOtchStatusNo = false
+			},
+			
+			
+			setOtchStatus (value) {
+				
+				if (this.premiumstatus) {
+				
+					setTimeout(function () {
+						
+						if (!this.loading_otch_status){
+			
+							this.loading_otch_status = true;						
+						
+							axios.post('setotchetstatus', this.otch_status)
+							.then((response) => {
+								
+								this.loading_otch_status = false;
+								this.errors_otch_status = '';
+
+								if (value == 0) {
+									this.closeOtchStatusNo();
+									
+									this.events[this.otch_status.itemindex].status = null;
+
+								} else if (value == 1) {
+									this.closeOtchStatusYes();
+									
+									this.events[this.otch_status.itemindex].status = response.data.status;
+									
+								} else if (value == 2) {
+									this.closeOtchStatusNotNow();
+									
+									this.events[this.otch_status.itemindex].status = response.data.status;
+									
+								}							
+								
+							})
+							.catch(error => {
+								this.loading_otch_status = false;
+								if (error.response.data.errors)
+								this.errors_otch_status = error.response.data.errors;
+							});
+													
+						}  
+					}.bind(this))
+				
+				}
+		
+			},
+				
+		},
+
+	}
+
+</script>
+
+<style scoped>
+
+	.word-break {
+		word-break: break-word;
+	}
+	
+	.wrap-text {
+		white-space: normal;
+	}
+	
+	.v-dialog__content {
+		min-width: 480px;	
+	}
+	
+	.v-list-item--link::before { 
+		background-color: transparent; 
+	}
+
+	
+</style>
